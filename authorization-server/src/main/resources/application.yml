@@ -1,0 +1,8 @@
+server:
+  port: 9090
+logging:
+  level:
+    root: INFO
+    org.springframework.web: INFO
+    org.springframework.security: DEBUG
+    org.springframework.security.oauth2: INFO
