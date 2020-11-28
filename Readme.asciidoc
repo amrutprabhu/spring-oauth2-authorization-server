@@ -1,0 +1,116 @@
+= Spring OAuth2 Authorization
+
+This is an implementation of the https://github.com/spring-projects-experimental/spring-authorization-server[Spring Authorization server] which is currently a community driven project.
+
+In the project we have explored two types of authorization
+
+1. Oauth code type grant
+
+2. Client password grant type.
+
+The third grant type i.e `password` grant type is not implemented in this authorization server as the
+authorization server is preparing for OAuth 2.1
+
+==== 1. Authorization Code grant type
+
+
+```
+http://localhost:9090/oauth2/authorize?client_id=client&response_type=code&scope=read
+```
+
+When you hit the above url in the browser, It redirects you to a login page to ask for the user's credentials.
+This is where the user enters his user name and password to allow the client to access the user's resource
+on behalf of the user.
+
+On successful authentication, The authserver redirects to the client's registered redirect URL. Something like this:
+
+```
+http://localhost:8080/authorized?code=Oyw308zp5xL9Sx9j776j-NjcqP6bx284RqbysuNI5aQ%3D
+```
+
+Now using the authorization code, I need to exchange this code for and access token. This is done on the backend,
+By exchanging passing the client credentials and the authorization code.
+
+We can do this with the following curl command.
+```
+curl -X POST \
+-u "client:secret" \
+--header "Content-Type:application/x-www-form-urlencoded" \
+http://localhost:9090/oauth2/token \
+-d code=Oyw308zp5xL9Sx9j776j-NjcqP6bx284RqbysuNI5aQ%3D \
+-d grant_type=authorization_code
+```
+
+Now using the access token generated, the client can now access the resource server , i.e the Users resource on behalf the user.
+
+To do this, we will not make a call to the resource server:
+
+```
+curl -i \
+-H "Authorization: Bearer eyJraWQiOiIwNDlkZDExYi1iMjRmLTQ3NjUtYTI0YS01NmIxYjExMTgzNWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMSIsImF1ZCI6ImNsaWVudCIsIm5iZiI6MTYwNjU5MzgwNCwic2NvcGUiOlsicmVhZCJdLCJpc3MiOiJodHRwczpcL1wvb2F1dGgyLnByb3ZpZGVyLmNvbSIsImV4cCI6MTYwNjU5NzQwNCwiaWF0IjoxNjA2NTkzODA0LCJqdGkiOiI2MDllMDI4ZS01YTU2LTQ1ZjktOTVhNS0xOWFhMzBiODRiMTkifQ.IqeBFDKIaxxWfepljxVJiVQPFtRcqIj_8tJKPiP5adk7uLZgBgiRA1DNvfdwDCSYw8GEpYMmAKnwWXzx2PRWfMt1HBUB0wATLyoESkdPcD70AYFMJNwZDCrio8zpaQW4_28xP2GjfRsFkc9j_ugx2bmlS8RhCxg7KeD13CIWdG6RP8L0do4yV2VeJ54i7DXjKLKvIg6T4Dm4hwK2_NjNMyGYbrQDbWoN797NOfYXHj9yPtOC8zgrX0yR1LMRAewpMX8fAjN85n8tPU1XqbNuW5lDT4_K6vyojl5d-JlBSHMaaM3idLhnaqlwnffeOeDFYajzH-LmDeZ7mkZAYZPtVA" \
+http://localhost:8080/messages
+
+Output ==>
+HTTP/1.1 200
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 1; mode=block
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Pragma: no-cache
+Expires: 0
+X-Frame-Options: DENY
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 24
+Date: Sat, 28 Nov 2020 20:25:03 GMT
+
+ OK you got the messages.
+```
+
+This is how you can use the code grant type to access a users resources.
+
+=== 2. Client Credentials.
+
+With `client credentials` grant type, the client wants to access its own resources(may be other microservices on the client side)
+with no user involved.
+
+In this case the client uses its own client id and secret to get an access token access a resource.
+
+First of all we have to convert the client id and secret in the format `<client id>:<client secret>` to base64.
+
+To do this on mac use the following command.
+
+```
+echo -n "client:secret" | base64
+
+output => Y2xpZW50OnNlY3JldA==
+```
+
+The `-n` makes sure a line break (\n) is not included.
+
+We can make a call to the authorization server with following request and client credential grant type.
+
+```
+curl -X POST -H "Authorization: basic Y2xpZW50OnNlY3JldA==" \
+"http://localhost:9090/oauth2/token?grant_type=client_credentials"
+```
+
+Then make a call to the resource server using the access token.
+
+```
+curl -i \
+-H "Authorization: Bearer eyJraWQiOiIwNDlkZDExYi1iMjRmLTQ3NjUtYTI0YS01NmIxYjExMTgzNWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJjbGllbnQiLCJhdWQiOiJjbGllbnQiLCJuYmYiOjE2MDY1OTUwMzcsInNjb3BlIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJodHRwczpcL1wvb2F1dGgyLnByb3ZpZGVyLmNvbSIsImV4cCI6MTYwNjU5ODYzNywiaWF0IjoxNjA2NTk1MDM3LCJqdGkiOiI3OWMxYWEyNi01OTEzLTQzNTEtYWNhMC02NzU3ZWMwMzZhNTMifQ.agzJVBqIP6lywS4mOLfuw2l2UU7mPd0ilMV_iD8XkmtavR2UhuaysxlVl_eCA0MAexXwx9uUybdXKYQYXQe5yvtVZpb3rlbfYcGODFAuD8agrLMiRR2XaLMEzt0oRbfGMYBB4ENnbDRmDaItzYSqRgCUWVKlt6yFTyFUk_U58gqbziyqVbi1mICu4yXd5VFZuMZuniyX8wqVOdOIGeA3CqmLSQfbbCnKQ4iQrUoy9o700iomnS6Zr1jDIQrjJae7AKGrRiOoAEy_dmTdszTRFq1pj6EninuzlQ-Rjg8-4ycgJH3_BaVdteBsZ_aH-A-mcpSeT9JqJ_WZ7mVAjU1KOw" \
+http://localhost:8080/messages
+
+Output ==>
+HTTP/1.1 200
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 1; mode=block
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Pragma: no-cache
+Expires: 0
+X-Frame-Options: DENY
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 24
+Date: Sat, 28 Nov 2020 20:25:03 GMT
+
+ OK you got the messages.
+```
